@@ -76,8 +76,14 @@ case $event in
   SessionEnd) rm -f "$file" ;;
 esac
 
+# The hook runs async, so two events can finish out of order: never let an
+# older event overwrite a newer one.
 if [[ -n $state ]]; then
   previous=$(cat "$file" 2>/dev/null || echo '{}')
+  newer=$(jq -r --argjson now "$now" '(.t // 0) > $now' <<<"$previous" 2>/dev/null)
+  [[ $newer == true ]] && state=
+fi
+if [[ -n $state ]]; then
   jq -c --arg state "$state" --argjson previous "$previous" --arg pid "$(claude_pid)" '
     {
       state: $state,

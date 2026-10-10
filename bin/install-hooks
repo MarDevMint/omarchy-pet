@@ -2,7 +2,8 @@
 
 # Add (or with --uninstall, remove) the mar.claudepet hooks in Claude Code's
 # settings.json. Other hooks are left alone and a timestamped backup is made
-# before every change.
+# before every change. The hook is installed async: Claude Code runs it in
+# the background and never waits for it.
 
 set -euo pipefail
 
@@ -28,10 +29,12 @@ case $mode in
   install)
     filter='
       reduce ($spec | to_entries[]) as $e (.;
-        if any(.hooks[$e.key][]?.hooks[]?; .command == $cmd) then .
+        if any(.hooks[$e.key][]?.hooks[]?; .command == $cmd)
+        # Already there: make sure it runs async (older installs did not).
+        then .hooks[$e.key] |= map(.hooks |= map(if .command == $cmd then . + {async: true} else . end))
         else .hooks[$e.key] = ((.hooks[$e.key] // []) +
           [ (if $e.value == "" then {} else {matcher: $e.value} end)
-            + {hooks: [{type: "command", command: $cmd}]} ])
+            + {hooks: [{type: "command", command: $cmd, async: true}]} ])
         end)' ;;
   --uninstall | uninstall)
     filter='

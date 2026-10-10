@@ -121,6 +121,47 @@ KeyboardPanel {
         onClicked: root.pet.togglePin()
       }
 
+      // Desktop size: 100% is the full size (deskScale 0.55).
+      Item {
+        width: parent.width
+        height: sizeLabel.implicitHeight + sizeSlider.implicitHeight + Style.spacing.xs
+
+        Text {
+          id: sizeLabel
+          text: "Desktop size"
+          color: Color.foreground
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+          textFormat: Text.PlainText
+        }
+
+        Text {
+          anchors.right: parent.right
+          text: Math.round(sizeSlider.liveValue) + "%"
+          color: Color.foreground
+          opacity: 0.7
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+          textFormat: Text.PlainText
+        }
+
+        PanelSlider {
+          id: sizeSlider
+          anchors.left: parent.left
+          anchors.right: parent.right
+          anchors.bottom: parent.bottom
+          bar: root.pet.bar
+          minimum: 30
+          maximum: 100
+          step: 5
+          integer: true
+          value: Math.round(root.pet.deskScale / root.pet.fullDeskScale * 100)
+          onReleased: function(v) {
+            root.pet.setSetting("deskScale", Math.round(v) / 100 * root.pet.fullDeskScale)
+          }
+        }
+      }
+
       Toggle {
         width: parent.width
         label: "Animate"

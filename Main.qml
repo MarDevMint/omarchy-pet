@@ -26,7 +26,8 @@ BarWidget {
   // --- settings --------------------------------------------------------------
 
   readonly property real petScale: Number(setting("scale", 1.0))
-  readonly property real deskScale: Number(setting("deskScale", 0.55))
+  readonly property real fullDeskScale: 0.55   // "100%" in the panel
+  readonly property real deskScale: Number(setting("deskScale", fullDeskScale))
   readonly property real animationSpeed: Number(setting("animationSpeed", 1.0))
   readonly property bool smoothScaling: setting("smoothScaling", false) === true
   readonly property bool animate: setting("animate", true) !== false

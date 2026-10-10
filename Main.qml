@@ -4,6 +4,7 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "lib/Moves.js" as Moves
+import "lib/Util.js" as LibUtil
 import "lib/Colors.js" as Colors
 import "services" as Services
 import "ui" as UI
@@ -16,7 +17,10 @@ import "ui" as UI
 //   services/ClaudeState.qml  Claude Code state from bin/claudepet-hook
 //   services/Music.qml        is any media player playing (MPRIS)
 //   ui/ClawdSprite.qml        one atlas cell
-//   ui/DesktopPet.qml         Clawd walking along the bottom of the screen
+//   ui/DesktopPet.qml         desktop strip, one Clawd per agent
+//   ui/DeskClawd.qml          one walking Clawd (drag, bubble, pin)
+//   ui/BarAgents.qml          one small Clawd per agent in the bar
+//   ui/CountBadge.qml         notification-style badge
 //   ui/PetPanel.qml           the panel that opens from the bar
 //   tools/build-atlas         packs the GIFs into assets/clawd/spritesheet.png
 //   tools/build-shaders       compiles assets/shaders (body recolour)
@@ -36,7 +40,8 @@ BarWidget {
   readonly property bool animate: setting("animate", true) !== false
   readonly property bool roam: setting("roam", true) !== false
   readonly property bool pinned: setting("pinned", false) === true
-  readonly property real pinX: Number(setting("pinX", -1))
+  // {cwd: 0..1}: where each project's Clawd stands when pinned.
+  readonly property var deskPositions: setting("deskPositions", ({}))
   // Bar: "Single" = one Clawd + badge, "Agents" = one Clawd per session.
   readonly property string barStyle: String(setting("barStyle", "Single"))
   // Badge on the single Clawd: "Count", "Dot" or "None".
@@ -119,7 +124,7 @@ BarWidget {
     oneShot = Moves.move(key)
     oneShotLoops = loops || 1
     frame = 0
-    if (key.indexOf("walk") === 0) desk.startWalk()
+    if (key.indexOf("walk") === 0) desk.walkAll()
   }
 
   onBaseMoveChanged: if (!oneShot) frame = 0
@@ -159,14 +164,14 @@ BarWidget {
 
   function toggleHooks() {
     if (hookInstaller.running) return
-    var script = decodeURIComponent(String(Qt.resolvedUrl("bin/install-hooks")).replace(/^file:\/\//, ""))
+    var script = LibUtil.localPath(Qt.resolvedUrl("bin/install-hooks"))
     hookInstaller.removing = claude.hooksInstalled
     hookInstaller.command = claude.hooksInstalled ? [script, "--uninstall"] : [script]
     hookInstaller.running = true
   }
 
   function togglePin() {
-    desk.requestPin(!root.pinned)
+    desk.pinRequested(!root.pinned, desk.currentPositions())
   }
 
   IpcHandler {
@@ -175,12 +180,12 @@ BarWidget {
     function play(move: string): void { root.playOnce(move, 2) }
     function reload(): void { root.claude.reload() }
     function toggle(): void { root.panelOpen = !root.panelOpen }
-    function walk(): void { desk.startWalk() }
+    function walk(): void { desk.walkAll() }
     function pin(): void { root.togglePin() }
     function pickColour(cwd: string): void { root.panelOpen = true; petPanel.editingCwd = cwd }
     function status(): string {
       return JSON.stringify({ claude: root.claude.state, music: music.playing,
-        move: root.shownMove.key, pinned: root.pinned, walking: desk.walking })
+        move: root.shownMove.key, pinned: root.pinned, agents: root.claude.agents.length })
     }
   }
 
@@ -273,22 +278,25 @@ BarWidget {
     screen: barWindow ? barWindow.screen : null
     visible: root.roam && barWindow !== null
 
-    move: root.shownMove
-    canWander: root.roam && root.animate && root.claudeIdle && !root.oneShot
+    agents: root.claude.agents
+    fallbackMove: root.shownMove
+    fallbackText: root.moodLine
+    previewMove: root.oneShot
+    musicPlaying: music.playing
+    colourFor: root.colourFor
+    positions: root.deskPositions
     pinned: root.pinned
-    pinX: root.pinX
+    roam: root.roam
     petScale: root.deskScale
     smoothScaling: root.smoothScaling
     animate: root.animate
     speed: root.animationSpeed
-    tint: root.mainTint
-    bubbleText: root.moodLine
-    bubbleForced: root.claude.state === "waiting" || root.claude.state === "error"
-      || root.claude.state === "done"
 
-    onTouched: root.playOnce("laptop", 2)
-    onPinRequested: function(isPinned, fraction) {
-      root.setSettings({ pinned: isPinned, pinX: fraction })
+    onPinRequested: function(isPinned, positions) {
+      var merged = {}
+      for (var k in root.deskPositions) merged[k] = root.deskPositions[k]
+      for (var p in positions) merged[p] = positions[p]
+      root.setSettings({ pinned: isPinned, deskPositions: merged })
     }
   }
 

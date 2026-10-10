@@ -17,6 +17,15 @@ Item {
   implicitWidth: height * Moves.CELL_WIDTH / Moves.CELL_HEIGHT
   clip: true
 
+  // The shader runs on this item's layer, i.e. only the visible cell, not
+  // the whole atlas (one cell-sized texture per recoloured Clawd).
+  layer.enabled: recoloured
+  layer.smooth: smooth
+  layer.effect: ShaderEffect {
+    property color target: root.tint
+    fragmentShader: Qt.resolvedUrl("../assets/shaders/recolor.frag.qsb")
+  }
+
   Image {
     width: root.width * Moves.COLUMNS
     height: root.height * Moves.ROWS
@@ -26,12 +35,5 @@ Item {
     smooth: root.smooth
     mipmap: root.smooth
     asynchronous: true
-
-    layer.enabled: root.recoloured
-    layer.smooth: root.smooth
-    layer.effect: ShaderEffect {
-      property color target: root.tint
-      fragmentShader: Qt.resolvedUrl("../assets/shaders/recolor.frag.qsb")
-    }
   }
 }

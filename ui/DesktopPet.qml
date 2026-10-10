@@ -4,52 +4,46 @@ import Quickshell.Wayland
 import qs.Commons
 import "../lib/Moves.js" as Moves
 
-// Clawd on the desktop: a strip along the bottom of the screen. Only Clawd
-// himself takes clicks (mask); everything else passes through to the windows
-// below. Wanders while allowed, otherwise stands and shows `move`.
+// The desktop strip along the bottom of the screen: one Clawd per agent
+// (DeskClawd.qml), or the classic Clawd when no Claude Code session is open.
+// Only the Clawds take clicks (mask); everything else passes through.
 PanelWindow {
   id: root
 
-  property var move: Moves.MOVES.rest
-  property bool canWander: false
+  property var agents: []            // ClaudeState.agents
+  property var fallbackMove: Moves.MOVES.rest
+  property string fallbackText: ""
+  property var previewMove: null     // a move previewed from the panel
+  property bool musicPlaying: false
+  property var colourFor: function(cwd) { return "#c97159" }
+  property var positions: ({})       // {cwd: 0..1}, saved while pinned
   property bool pinned: false
-  property real pinX: -1           // 0..1 along the strip, -1 = default spot
+  property bool roam: true
   property real petScale: 0.55
   property bool smoothScaling: false
   property bool animate: true
   property real speed: 1.0
-  property color tint: "#c97159"
-  property real walkSpeed: 28      // px per second
-  property string bubbleText: ""
-  property bool bubbleForced: false
+  property int maxShown: 7
 
-  signal touched()
-  signal pinRequested(bool pinned, real fraction)
+  // (pinned, {cwd: fraction}) — the caller saves both.
+  signal pinRequested(bool pinned, var positions)
 
-  readonly property real petW: Moves.CELL_WIDTH * petScale
-  readonly property real petH: Moves.CELL_HEIGHT * petScale
-  readonly property real maxX: Math.max(0, width - petW)
-  readonly property bool walking: walkAnim.running
-  readonly property var shownMove: walking
-    ? Moves.move(walkingRight ? "walkRight" : "walkLeft") : move
-  property bool walkingRight: true
-  property bool dragging: false
-  property int frame: 0
+  readonly property bool hasAgents: agents.length > 0
+  readonly property var clawds: hasAgents ? agents.slice(0, maxShown) : [{ cwd: "", fallback: true }]
+  property var maskRegions: []
 
-  function startWalk() {
-    if (maxX <= 0 || pinned) return
-    var from = pet.x
-    var to = Math.random() * maxX
-    if (Math.abs(to - from) < 80) to = from > maxX / 2 ? from - 160 : from + 160
-    to = Math.max(0, Math.min(maxX, to))
-    walkingRight = to > from
-    walkAnim.to = to
-    walkAnim.duration = Math.abs(to - from) / walkSpeed * 1000
-    walkAnim.restart()
+  function currentPositions() {
+    var out = {}
+    for (var i = 0; i < clawdRepeater.count; i++) {
+      var c = clawdRepeater.itemAt(i)
+      if (c && c.fraction >= 0) out[c.key] = c.fraction
+    }
+    return out
   }
 
-  function requestPin(isPinned) {
-    pinRequested(isPinned, maxX > 0 ? pet.x / maxX : -1)
+  function walkAll() {
+    for (var i = 0; i < clawdRepeater.count; i++)
+      if (clawdRepeater.itemAt(i)) clawdRepeater.itemAt(i).startWalk()
   }
 
   color: "transparent"
@@ -62,106 +56,58 @@ PanelWindow {
     right: true
     bottom: true
   }
-  implicitHeight: Math.ceil(petH + bubble.height + Style.spacing.sm)
-  mask: Region { item: pet }
+  implicitHeight: Math.ceil(Moves.CELL_HEIGHT * petScale + Style.font.caption * 2.5 + Style.spacing.md)
+  mask: Region { regions: root.maskRegions }
 
-  onMaxXChanged: if (pet.x > maxX) pet.x = maxX
-  onCanWanderChanged: if (!canWander && walkAnim.running) walkAnim.stop()
-  onPinnedChanged: if (pinned && walkAnim.running) walkAnim.stop()
-  onShownMoveChanged: frame = 0
+  Repeater {
+    id: clawdRepeater
+    model: root.clawds
 
-  Timer {
-    id: restTimer
-    interval: 6000 + Math.random() * 10000
-    running: root.visible && root.canWander && !root.pinned && !root.walking && !root.dragging
-    repeat: false
-    onTriggered: {
-      root.startWalk()
-      interval = 6000 + Math.random() * 10000
-    }
-  }
+    DeskClawd {
+      required property var modelData
+      required property int index
+      readonly property string key: modelData.cwd || ""
+      readonly property bool isFallback: !!modelData.fallback
+      readonly property string agentState: isFallback ? "idle" : Moves.state(modelData.state)
 
-  Timer {
-    interval: Moves.frameInterval(root.shownMove, root.speed)
-    running: root.visible && root.animate
-    repeat: true
-    onTriggered: root.frame = (root.frame + 1) % root.shownMove.frames
-  }
-
-  NumberAnimation {
-    id: walkAnim
-    target: pet
-    property: "x"
-    easing.type: Easing.Linear
-  }
-
-  Item {
-    id: pet
-    width: root.petW
-    height: root.petH
-    y: root.height - height
-    // Starting spot. Walking and dragging take over x afterwards.
-    x: root.pinX >= 0 ? root.pinX * root.maxX : root.maxX * 0.85
-
-    ClawdSprite {
       anchors.fill: parent
-      move: root.shownMove
-      frame: root.animate ? root.frame : 0
-      smooth: root.smoothScaling
-      tint: root.tint
-    }
+      move: root.previewMove
+        || (isFallback ? root.fallbackMove : Moves.moveForState(agentState, root.musicPlaying))
+      canWander: root.roam && root.animate && Moves.isIdle(agentState) && !root.previewMove
+      pinned: root.pinned
+      startX: root.positions[key] !== undefined ? Number(root.positions[key]) : -1
+      spawnX: Math.max(0.05, 0.85 - index * 0.12)
+      petScale: root.petScale
+      smoothScaling: root.smoothScaling
+      animate: root.animate
+      speed: root.speed
+      tint: isFallback ? "#c97159" : root.colourFor(key)
+      bubbleText: isFallback ? root.fallbackText
+        : (modelData.project || "unknown") + " · " + (agentState === "idle"
+          ? (root.musicPlaying ? "Listening to music" : "Resting")
+          : Moves.stateLabel(agentState) + (modelData.detail ? " · " + modelData.detail : ""))
+      bubbleForced: agentState === "waiting" || agentState === "error" || agentState === "done"
 
-    MouseArea {
-      id: mouse
-      anchors.fill: parent
-      acceptedButtons: Qt.LeftButton | Qt.RightButton
-      hoverEnabled: true
-      cursorShape: root.dragging ? Qt.ClosedHandCursor : Qt.PointingHandCursor
-      drag.target: pet
-      drag.axis: Drag.XAxis
-      drag.minimumX: 0
-      drag.maximumX: root.maxX
-      property bool moved: false
-
-      onPressed: { moved = false; walkAnim.stop() }
-      onPositionChanged: if (drag.active) { moved = true; root.dragging = true }
-      onReleased: {
-        root.dragging = false
-        if (moved && root.pinned) root.requestPin(true)
-      }
-      onClicked: function(event) {
-        if (moved) return
-        if (event.button === Qt.RightButton) root.requestPin(!root.pinned)
-        else root.touched()
-      }
+      onTouched: playOnce("laptop", 2)
+      onPinToggled: root.pinRequested(!root.pinned, root.currentPositions())
+      onDropped: if (root.pinned) root.pinRequested(true, root.currentPositions())
     }
   }
 
-  // Speech bubble: on hover, and on its own when the caller forces it
-  // (Claude needs you, failed, just finished).
-  Rectangle {
-    id: bubble
-    readonly property bool shown: mouse.containsMouse || root.bubbleForced
-    width: bubbleLabel.implicitWidth + Style.spacing.md * 2
-    height: bubbleLabel.implicitHeight + Style.spacing.sm * 2
-    x: Math.max(0, Math.min(root.width - width, pet.x + pet.width / 2 - width / 2))
-    y: pet.y + pet.height * 0.3 - height
-    radius: Style.cornerRadius
-    color: Color.popups.background
-    border.color: Color.popups.border
-    border.width: 1
-    opacity: shown && root.bubbleText !== "" ? 1 : 0
-    visible: opacity > 0
-    Behavior on opacity { NumberAnimation { duration: 150 } }
-
-    Text {
-      id: bubbleLabel
-      anchors.centerIn: parent
-      text: root.bubbleText + (root.pinned ? "  󰐃" : "")
-      textFormat: Text.PlainText
-      color: Color.foreground
-      font.family: Style.font.family
-      font.pixelSize: Style.font.caption
+  // One click region per Clawd, kept in step with the Repeater.
+  Instantiator {
+    model: clawdRepeater.count
+    delegate: Region {
+      required property int index
+      item: clawdRepeater.itemAt(index) ? clawdRepeater.itemAt(index).hitArea : null
+    }
+    onObjectAdded: function(i, region) {
+      var next = root.maskRegions.slice()
+      next.splice(i, 0, region)
+      root.maskRegions = next
+    }
+    onObjectRemoved: function(i, region) {
+      root.maskRegions = root.maskRegions.filter(function(r) { return r !== region })
     }
   }
 }

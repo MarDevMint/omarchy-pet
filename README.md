@@ -30,7 +30,8 @@ lib/Moves.js              moves, atlas layout, Claude state -> move
 services/ClaudeState.qml  Claude Code state from the hook's state file
 services/Music.qml        whether any media player is playing (MPRIS)
 ui/ClawdSprite.qml        one cell of the atlas
-ui/DesktopPet.qml         Clawd on the desktop
+ui/DesktopPet.qml         desktop strip, one Clawd per agent
+ui/DeskClawd.qml          one walking Clawd (drag, bubble, pin)
 ui/PetPanel.qml           the panel (sized for 1366x768)
 bin/claudepet-hook        Claude Code hook, writes $XDG_RUNTIME_DIR/mar-claudepet
 bin/install-hooks         add/remove the hook in ~/.claude/settings.json (backup first)

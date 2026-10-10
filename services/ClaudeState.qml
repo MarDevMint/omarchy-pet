@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "../lib/Moves.js" as Moves
+import "../lib/Util.js" as LibUtil
 
 // What Claude Code is doing, read from the state file bin/claudepet-hook
 // keeps in XDG_RUNTIME_DIR. Short-lived states (done, error) expire to idle.
@@ -23,7 +24,17 @@ Item {
 
   // Every live Claude Code session, oldest first:
   // {id, project, cwd, state, detail, tool, t, pid, since}
-  readonly property var agents: Array.isArray(raw.agents) ? raw.agents : []
+  // done/error expire to idle per agent too (holdMs in lib/Moves.js).
+  property double now: Date.now()
+  readonly property var agents: (Array.isArray(raw.agents) ? raw.agents : []).map(function(a) {
+    var hold = (Moves.STATES[a.state] || {}).holdMs
+    if (hold === undefined || root.now - Number(a.t || 0) <= hold) return a
+    var copy = {}
+    for (var k in a) copy[k] = a[k]
+    copy.state = "idle"
+    copy.detail = ""
+    return copy
+  })
   // Agents doing something right now, and those also waiting on the user.
   readonly property int workingCount: agents.filter(function(a) { return root.isBusy(a.state) }).length
   readonly property int waitingCount: agents.filter(function(a) { return a.state === "waiting" }).length
@@ -79,7 +90,7 @@ Item {
   // dead sessions and rebuild state.json every 30 s (about 20 ms of work).
   Process {
     id: refresher
-    command: [decodeURIComponent(String(Qt.resolvedUrl("../bin/claudepet-hook")).replace(/^file:\/\//, "")), "--refresh"]
+    command: [LibUtil.localPath(Qt.resolvedUrl("../bin/claudepet-hook")), "--refresh"]
   }
 
   Timer {
@@ -97,6 +108,9 @@ Item {
     interval: 2000
     running: true
     repeat: true
-    onTriggered: stateView.reload()
+    onTriggered: {
+      root.now = Date.now()
+      stateView.reload()
+    }
   }
 }

@@ -94,10 +94,12 @@ mkdir -p "$sessions"
 
 # Drop sessions whose Claude Code process is gone.
 shopt -s nullglob
-for f in "$sessions"/*.json; do
-  pid=$(jq -r '.pid // empty' "$f" 2>/dev/null)
-  [[ -n $pid && ! -d /proc/$pid ]] && rm -f "$f"
-done
+files=("$sessions"/*.json)
+if (( ${#files[@]} )); then
+  while IFS=$'\t' read -r f pid; do
+    [[ -n $pid && ! -d /proc/$pid ]] && rm -f "$f"
+  done < <(jq -r '[input_filename, (.pid // "" | tostring)] | @tsv' "${files[@]}" 2>/dev/null)
+fi
 
 # Fold all sessions into one state. Needing the user wins, then failures,
 # then the most recent activity. Busy sessions silent for 15 minutes are

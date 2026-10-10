@@ -21,6 +21,18 @@ Item {
     + (detail === "" ? "" : " · " + detail)
   property bool hooksInstalled: false
 
+  // Every live Claude Code session, oldest first:
+  // {id, project, cwd, state, detail, tool, t, pid, since}
+  readonly property var agents: Array.isArray(raw.agents) ? raw.agents : []
+  // Agents doing something right now, and those also waiting on the user.
+  readonly property int workingCount: agents.filter(function(a) { return root.isBusy(a.state) }).length
+  readonly property int waitingCount: agents.filter(function(a) { return a.state === "waiting" }).length
+  readonly property int activeCount: workingCount + waitingCount
+
+  function isBusy(name) {
+    return name === "thinking" || name === "reading" || name === "building" || name === "working"
+  }
+
   function refresh() {
     var s = Moves.state(String(raw.state || "idle"))
     var hold = Moves.STATES[s].holdMs

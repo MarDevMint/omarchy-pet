@@ -76,6 +76,60 @@ KeyboardPanel {
 
       PanelSectionHeader {
         width: parent.width
+        text: "Agents · " + root.pet.claude.activeCount + " active of " + root.pet.claude.agents.length
+      }
+
+      Text {
+        width: parent.width
+        visible: root.pet.claude.agents.length === 0
+        text: "No Claude Code sessions open"
+        color: Color.foreground
+        opacity: 0.6
+        font.family: Style.font.family
+        font.pixelSize: Style.font.caption
+        textFormat: Text.PlainText
+      }
+
+      Repeater {
+        model: root.pet.claude.agents
+
+        // One line per agent: project, then what it is doing.
+        Item {
+          required property var modelData
+          width: column.width
+          height: agentName.implicitHeight + Style.spacing.xs
+
+          Text {
+            id: agentName
+            anchors.left: parent.left
+            width: parent.width * 0.5
+            text: modelData.project || "unknown"
+            color: Color.foreground
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            font.bold: true
+            textFormat: Text.PlainText
+            elide: Text.ElideRight
+          }
+
+          Text {
+            anchors.right: parent.right
+            width: parent.width * 0.5 - Style.spacing.sm
+            horizontalAlignment: Text.AlignRight
+            text: Moves.stateLabel(modelData.state)
+              + (modelData.detail ? " · " + modelData.detail : "")
+            color: modelData.state === "waiting" ? Color.accent : Color.foreground
+            opacity: root.pet.claude.isBusy(modelData.state) || modelData.state === "waiting" ? 1 : 0.55
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            textFormat: Text.PlainText
+            elide: Text.ElideRight
+          }
+        }
+      }
+
+      PanelSectionHeader {
+        width: parent.width
         text: "Moves · click to preview"
       }
 

@@ -1,9 +1,13 @@
 #!/bin/bash
 
-# Claude Code hook for mar.claudepet. Records what each session is doing and
-# folds every session into one state.json the bar widget watches. Lives in
-# XDG_RUNTIME_DIR (RAM, private to this user). Prints nothing and always
-# exits 0 so it never disturbs Claude Code.
+# Claude Code hook for mar.claudepet. Records what each session (agent) is
+# doing and folds every live session into one state.json the bar widget
+# watches. Lives in XDG_RUNTIME_DIR (RAM, private to this user). Prints
+# nothing and always exits 0 so it never disturbs Claude Code.
+#
+# sessions/<id>.json  {state, detail, tool, t, project, cwd, pid, since}
+# state.json          {state, detail, tool, t, sessions, agents: [...]}
+#                     top-level fields = the agent that matters most now.
 
 umask 077
 dir="${XDG_RUNTIME_DIR:-/run/user/$UID}/mar-claudepet"
@@ -12,13 +16,15 @@ now=$(date +%s%3N)
 
 record=$(jq -c --argjson now "$now" '
   def cut(n): tostring | gsub("[\u0000-\u001f\u007f]"; " ") | if length > n then .[0:n] + "…" else . end;
-  def base: tostring | split("/") | last;
+  def base: tostring | split("/") | map(select(. != "")) | last // "";
   (.tool_input // {}) as $in
   | (.tool_name // "") as $tool
   | {
       session: (.session_id // ""),
       event: (.hook_event_name // ""),
       tool: $tool,
+      cwd: (.cwd // "" | tostring),
+      project: (.cwd // "" | base | cut(32)),
       detail: (
         if ($in.file_path // $in.notebook_path) then ($in.file_path // $in.notebook_path | base)
         elif $tool == "Bash" then ($in.description // ($in.command // "" | split(" ") | first) | cut(40))
@@ -34,17 +40,32 @@ record=$(jq -c --argjson now "$now" '
       t: $now
     }' 2>/dev/null) || exit 0
 
-session=$(jq -r '.session' <<<"$record")
+IFS=$'\t' read -r session event kind < <(jq -r '[.session, .event, .kind] | @tsv' <<<"$record")
 [[ $session =~ ^[A-Za-z0-9-]+$ ]] || exit 0
 
 mkdir -p "$sessions"
 file="$sessions/$session.json"
 
+# The Claude Code process this hook belongs to (claude, or node inside an
+# editor), so sessions closed without SessionEnd can be dropped later.
+claude_pid() {
+  local pid=$PPID comm
+  for _ in 1 2 3 4 5; do
+    [[ $pid -gt 1 ]] || return
+    comm=$(</proc/$pid/comm) 2>/dev/null || return
+    if [[ $comm == claude || $comm == node ]]; then
+      echo "$pid"
+      return
+    fi
+    pid=$(awk '/^PPid:/ { print $2 }' "/proc/$pid/status" 2>/dev/null)
+  done
+}
+
 state=
-case $(jq -r '.event' <<<"$record") in
+case $event in
   SessionStart) state=idle ;;
   UserPromptSubmit) state=thinking ;;
-  PreToolUse) state=$(jq -r '.kind' <<<"$record") ;;
+  PreToolUse) state=$kind ;;
   Notification | PermissionRequest) state=waiting ;;
   Stop) state=done ;;
   StopFailure) state=error ;;
@@ -52,23 +73,38 @@ case $(jq -r '.event' <<<"$record") in
 esac
 
 if [[ -n $state ]]; then
-  jq -c --arg state "$state" '{state: $state, detail: (if $state == "waiting" or $state == "done" or $state == "idle" then "" else .detail end), tool, t}' \
-    <<<"$record" >"$file.tmp" && mv -f "$file.tmp" "$file"
+  previous=$(cat "$file" 2>/dev/null || echo '{}')
+  jq -c --arg state "$state" --argjson previous "$previous" --arg pid "$(claude_pid)" '
+    {
+      state: $state,
+      detail: (if ($state | test("^(waiting|done|idle)$")) then "" else .detail end),
+      tool, t, project, cwd,
+      pid: ($pid | tonumber? // $previous.pid // null),
+      since: ($previous.since // .t)
+    }' <<<"$record" >"$file.tmp" && mv -f "$file.tmp" "$file"
 fi
+
+# Drop sessions whose Claude Code process is gone.
+shopt -s nullglob
+for f in "$sessions"/*.json; do
+  pid=$(jq -r '.pid // empty' "$f" 2>/dev/null)
+  [[ -n $pid && ! -d /proc/$pid ]] && rm -f "$f"
+done
 
 # Fold all sessions into one state. Needing the user wins, then failures,
 # then the most recent activity. Busy sessions silent for 15 minutes are
-# treated as gone (crashed without SessionEnd).
-shopt -s nullglob
+# treated as stuck and shown idle.
 files=("$sessions"/*.json)
 jq -cn --argjson now "$now" '
   def rank: {"waiting": 5, "error": 4, "thinking": 3, "reading": 3, "building": 3, "working": 3, "done": 2, "idle": 1}[.state] // 0;
   [inputs
     | select(.state != null)
-    | select(rank != 3 or ($now - .t) < 900000)
-    | select(.state != "waiting" or ($now - .t) < 1800000)]
-  | {sessions: length, top: (sort_by(rank, .t) | last // {state: "idle", detail: "", t: $now})}
-  | .top + {sessions}
+    | if rank == 3 and ($now - .t) > 900000 then .state = "idle" | .detail = "" else . end
+    | if .state == "waiting" and ($now - .t) > 1800000 then .state = "idle" else . end
+    | .id = (input_filename | split("/") | last | sub("\\.json$"; ""))]
+  | sort_by(.since) as $agents
+  | ($agents | sort_by(rank, .t) | last // {state: "idle", detail: "", t: $now})
+  | . + {sessions: ($agents | length), agents: $agents}
 ' "${files[@]}" </dev/null >"$dir/state.json.tmp" 2>/dev/null \
   && mv -f "$dir/state.json.tmp" "$dir/state.json"
 

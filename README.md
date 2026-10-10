@@ -27,15 +27,22 @@ IPC: `omarchy-shell mar.claudepet play|toggle|walk|pin|status|reload`
 ```
 Main.qml                  settings, animation clock, bar icon, wiring
 lib/Moves.js              moves, atlas layout, Claude state -> move
+lib/Colors.js             agent colours (per project), palette, hue picker
+lib/Util.js               small helpers
 services/ClaudeState.qml  Claude Code state from the hook's state file
 services/Music.qml        whether any media player is playing (MPRIS)
 ui/ClawdSprite.qml        one cell of the atlas
 ui/DesktopPet.qml         desktop strip, one Clawd per agent
 ui/DeskClawd.qml          one walking Clawd (drag, bubble, pin)
+ui/BarAgents.qml          one small Clawd per agent in the bar
+ui/CountBadge.qml         notification-style badge
 ui/PetPanel.qml           the panel (sized for 1366x768)
+assets/shaders/           body recolour shader (tools/build-shaders)
 bin/claudepet-hook        Claude Code hook, writes $XDG_RUNTIME_DIR/mar-claudepet
 bin/install-hooks         add/remove the hook in ~/.claude/settings.json (backup first)
 tools/build-atlas         packs ~/Pictures/Claude_pet GIFs into assets/clawd/spritesheet.png
+tools/clean-gif.py        removes halo / colour noise from source GIFs
+tools/build-shaders       compiles assets/shaders/*.frag with qsb
 ```
 
 Adding a move: add the GIF to `tools/build-atlas` (a new row), run it, add the

@@ -14,6 +14,7 @@ Row {
   property real spriteHeight: 24
   property int maxShown: 7
   property QtObject bar: null
+  property var colourFor: function(cwd) { return "#c97159" }
 
   signal clicked()
 
@@ -30,6 +31,7 @@ Row {
       move: Moves.moveForState(Moves.state(modelData.state), root.musicPlaying)
       frame: root.animate ? root.tick : 0
       smooth: root.smoothScaling
+      tint: root.colourFor(modelData.cwd)
 
       HoverHandler {
         onHoveredChanged: {

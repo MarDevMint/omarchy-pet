@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "mar.claudepet",
   "name": "Claude Pet",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "author": "Mar",
   "license": "MIT",
   "description": "Clawd, a tiny Claude Code companion in the bar and on your desktop. Reads with a magnifier, builds with a wrench, waits at the laptop when Claude needs you, wears headphones while your music plays and naps otherwise. Forked from OmaPets.",
@@ -34,7 +34,8 @@
       "deskScale": 0.55,
       "animationSpeed": 1.0,
       "barStyle": "Single",
-      "badge": "Count"
+      "badge": "Count",
+      "agentColors": {}
     },
     "schema": [
       {

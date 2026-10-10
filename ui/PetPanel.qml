@@ -3,6 +3,7 @@ import QtQuick.Controls
 import qs.Commons
 import qs.Ui
 import "../lib/Moves.js" as Moves
+import "../lib/Colors.js" as Colors
 
 // The panel that opens from the bar. Compact on purpose: it has to fit a
 // 1366x768 screen. Reads and drives everything through `pet` (Main.qml).
@@ -10,6 +11,8 @@ KeyboardPanel {
   id: root
 
   required property var pet
+  // Project whose colour is being picked ("" = picker closed).
+  property string editingCwd: ""
 
   contentWidth: root.fittedContentWidth(Style.space(300))
   contentHeight: root.fittedContentHeight(column.implicitHeight)
@@ -37,6 +40,7 @@ KeyboardPanel {
           move: root.pet.shownMove
           frame: root.pet.frame
           smooth: root.pet.smoothScaling
+          tint: root.pet.mainTint
 
           MouseArea {
             anchors.fill: parent
@@ -93,16 +97,37 @@ KeyboardPanel {
       Repeater {
         model: root.pet.claude.agents
 
-        // One line per agent: project, then what it is doing.
+        // One line per agent: colour, project, then what it is doing.
+        // Click the colour dot to change it.
         Item {
           required property var modelData
           width: column.width
           height: agentName.implicitHeight + Style.spacing.xs
 
+          Rectangle {
+            id: agentDot
+            anchors.left: parent.left
+            anchors.verticalCenter: agentName.verticalCenter
+            width: Style.space(10)
+            height: width
+            radius: width / 2
+            color: root.pet.colourFor(modelData.cwd)
+            border.width: root.editingCwd === modelData.cwd ? 2 : 0
+            border.color: Color.foreground
+
+            MouseArea {
+              anchors.fill: parent
+              anchors.margins: -Style.space(4)
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.editingCwd = root.editingCwd === modelData.cwd ? "" : modelData.cwd
+            }
+          }
+
           Text {
             id: agentName
-            anchors.left: parent.left
-            width: parent.width * 0.5
+            anchors.left: agentDot.right
+            anchors.leftMargin: Style.spacing.sm
+            width: parent.width * 0.5 - agentDot.width - Style.spacing.sm
             text: modelData.project || "unknown"
             color: Color.foreground
             font.family: Style.font.family
@@ -124,6 +149,76 @@ KeyboardPanel {
             font.pixelSize: Style.font.caption
             textFormat: Text.PlainText
             elide: Text.ElideRight
+          }
+        }
+      }
+
+      // Colour picker for one project: the palette, or any hue.
+      Column {
+        width: parent.width
+        spacing: Style.spacing.xs
+        visible: root.editingCwd !== ""
+
+        Row {
+          spacing: Style.spacing.sm
+
+          Repeater {
+            model: Colors.PALETTE
+
+            Rectangle {
+              required property var modelData
+              width: Style.space(20)
+              height: width
+              radius: Style.cornerRadius > 0 ? width / 2 : 0
+              color: modelData.hex
+              border.width: Qt.colorEqual(root.pet.colourFor(root.editingCwd), modelData.hex) ? 2 : 0
+              border.color: Color.foreground
+
+              MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.pet.setAgentColour(root.editingCwd, modelData.hex)
+              }
+            }
+          }
+        }
+
+        // Any hue: a rainbow track under a transparent slider.
+        Item {
+          width: parent.width
+          height: hueSlider.implicitHeight
+
+          Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            height: Math.max(6, hueSlider.trackHeight * 1.6)
+            radius: height / 2
+            gradient: Gradient {
+              orientation: Gradient.Horizontal
+              GradientStop { position: 0.0; color: Colors.fromHue(0) }
+              GradientStop { position: 0.17; color: Colors.fromHue(60) }
+              GradientStop { position: 0.33; color: Colors.fromHue(120) }
+              GradientStop { position: 0.5; color: Colors.fromHue(180) }
+              GradientStop { position: 0.67; color: Colors.fromHue(240) }
+              GradientStop { position: 0.83; color: Colors.fromHue(300) }
+              GradientStop { position: 1.0; color: Colors.fromHue(359) }
+            }
+          }
+
+          PanelSlider {
+            id: hueSlider
+            anchors.fill: parent
+            bar: root.pet.bar
+            minimum: 0
+            maximum: 359
+            step: 1
+            integer: true
+            value: Math.max(0, Qt.color(root.pet.colourFor(root.editingCwd)).hslHue * 360)
+            trackColor: "transparent"
+            fillColor: "transparent"
+            knobColor: Colors.fromHue(liveValue)
+            onReleased: function(v) { root.pet.setAgentColour(root.editingCwd, Colors.fromHue(v)) }
           }
         }
       }

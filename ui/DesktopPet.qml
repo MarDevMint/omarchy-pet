@@ -18,6 +18,7 @@ PanelWindow {
   property bool smoothScaling: false
   property bool animate: true
   property real speed: 1.0
+  property color tint: "#c97159"
   property real walkSpeed: 28      // px per second
   property string bubbleText: ""
   property bool bubbleForced: false
@@ -107,6 +108,7 @@ PanelWindow {
       move: root.shownMove
       frame: root.animate ? root.frame : 0
       smooth: root.smoothScaling
+      tint: root.tint
     }
 
     MouseArea {

@@ -4,6 +4,7 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "lib/Moves.js" as Moves
+import "lib/Colors.js" as Colors
 import "services" as Services
 import "ui" as UI
 
@@ -11,12 +12,14 @@ import "ui" as UI
 // (yesmeck/OmaPets, MIT), now split up:
 //
 //   lib/Moves.js              moves, atlas layout, Claude state -> move
+//   lib/Colors.js             agent colours (per project), palette
 //   services/ClaudeState.qml  Claude Code state from bin/claudepet-hook
 //   services/Music.qml        is any media player playing (MPRIS)
 //   ui/ClawdSprite.qml        one atlas cell
 //   ui/DesktopPet.qml         Clawd walking along the bottom of the screen
 //   ui/PetPanel.qml           the panel that opens from the bar
 //   tools/build-atlas         packs the GIFs into assets/clawd/spritesheet.png
+//   tools/build-shaders       compiles assets/shaders (body recolour)
 //
 // This file owns the settings, the animation clock and the bar icon.
 BarWidget {
@@ -38,6 +41,8 @@ BarWidget {
   readonly property string barStyle: String(setting("barStyle", "Single"))
   // Badge on the single Clawd: "Count", "Dot" or "None".
   readonly property string badge: String(setting("badge", "Count"))
+  // {cwd: "#rrggbb"}: one colour per project, see lib/Colors.js.
+  readonly property var agentColors: setting("agentColors", ({}))
 
   function setting(key, fallback) {
     return settings && settings[key] !== undefined ? settings[key] : fallback
@@ -67,6 +72,35 @@ BarWidget {
   readonly property var claude: claudeState
 
   readonly property bool claudeIdle: Moves.isIdle(claude.state)
+
+  // --- agent colours -----------------------------------------------------------
+
+  function colourFor(cwd) {
+    return Colors.colourFor(agentColors, cwd)
+  }
+
+  function setAgentColour(cwd, hex) {
+    if (!cwd || !Colors.normalized(hex)) return
+    var next = {}
+    for (var k in agentColors) next[k] = agentColors[k]
+    next[cwd] = Colors.normalized(hex)
+    setSetting("agentColors", next)
+  }
+
+  // New projects get a colour as soon as they show up.
+  function assignColours() {
+    var next = Colors.assign(agentColors, claude.agents)
+    if (next) setSetting("agentColors", next)
+  }
+
+  Connections {
+    target: root.claude
+    function onAgentsChanged() { Qt.callLater(root.assignColours) }
+  }
+
+  // The single Clawd wears the colour of the agent that matters most now.
+  readonly property color mainTint: claude.agents.length > 0
+    ? colourFor(claude.raw.cwd) : Colors.CLASSIC
   readonly property var baseMove: Moves.moveForState(claude.state, music.playing)
   property var oneShot: null
   property int oneShotLoops: 0
@@ -143,6 +177,7 @@ BarWidget {
     function toggle(): void { root.panelOpen = !root.panelOpen }
     function walk(): void { desk.startWalk() }
     function pin(): void { root.togglePin() }
+    function pickColour(cwd: string): void { root.panelOpen = true; petPanel.editingCwd = cwd }
     function status(): string {
       return JSON.stringify({ claude: root.claude.state, music: music.playing,
         move: root.shownMove.key, pinned: root.pinned, walking: desk.walking })
@@ -181,6 +216,7 @@ BarWidget {
     move: root.shownMove
     frame: root.animate ? root.frame : 0
     smooth: root.smoothScaling
+    tint: root.mainTint
 
     MouseArea {
       anchors.fill: parent
@@ -215,6 +251,7 @@ BarWidget {
     animate: root.animate
     smoothScaling: root.smoothScaling
     spriteHeight: root.barSize * root.petScale
+    colourFor: root.colourFor
     bar: root.bar
     onClicked: root.panelOpen = !root.panelOpen
   }
@@ -244,6 +281,7 @@ BarWidget {
     smoothScaling: root.smoothScaling
     animate: root.animate
     speed: root.animationSpeed
+    tint: root.mainTint
     bubbleText: root.moodLine
     bubbleForced: root.claude.state === "waiting" || root.claude.state === "error"
       || root.claude.state === "done"
@@ -255,6 +293,7 @@ BarWidget {
   }
 
   UI.PetPanel {
+    id: petPanel
     anchorItem: root
     bar: root.bar
     owner: root

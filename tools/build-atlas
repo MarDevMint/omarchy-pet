@@ -3,6 +3,8 @@
 # Pack Clawd's GIFs into assets/clawd/spritesheet.png: one row per move,
 # 8 columns of 192x208 cells. Row order must match ROWS in lib/Moves.js.
 #
+# Pixel-art GIFs come from clawd-gifs-clean (tools/clean-gif.py output).
+#
 # Each entry is "gif-path|vertical-shift". The shift moves a GIF down so
 # every move stands on the same ground line (y=200 in the cell).
 #
@@ -16,11 +18,11 @@ pics="$HOME/Pictures/Claude_pet"
 out="${1:-$plugin/assets/clawd/spritesheet.png}"
 
 rows=(
-  "$pics/clawd-gifs/clawd-failed.gif|0"                     # 0 rest
-  "$pics/clawd-gifs/clawd-idle.gif|0"                       # 1 music
-  "$pics/clawd-gifs/clawd-waving.gif|0"                     # 2 build
-  "$pics/clawd-gifs/clawd-waiting.gif|0"                    # 3 laptop
-  "$pics/clawd-gifs/clawd-review.gif|0"                     # 4 reading
+  "$pics/clawd-gifs-clean/clawd-failed.gif|0"                     # 0 rest
+  "$pics/clawd-gifs-clean/clawd-idle.gif|0"                       # 1 music
+  "$pics/clawd-gifs-clean/clawd-waving.gif|0"                     # 2 build
+  "$pics/clawd-gifs-clean/clawd-waiting.gif|0"                    # 3 laptop
+  "$pics/clawd-gifs-clean/clawd-review.gif|0"                     # 4 reading
   "$pics/clawd2-svg-gifs/recolored-c97159/clawd-walk-right.gif|16"  # 5 walk right
   "$pics/clawd2-svg-gifs/recolored-c97159/clawd-walk-left.gif|16"   # 6 walk left
 )

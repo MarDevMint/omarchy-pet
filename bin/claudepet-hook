@@ -14,6 +14,10 @@ dir="${XDG_RUNTIME_DIR:-/run/user/$UID}/mar-claudepet"
 sessions="$dir/sessions"
 now=$(date +%s%3N)
 
+# --refresh: no event, just drop dead sessions and rebuild state.json
+# (the widget calls this now and then, for terminals closed abruptly).
+if [[ ${1:-} != --refresh ]]; then
+
 record=$(jq -c --argjson now "$now" '
   def cut(n): tostring | gsub("[\u0000-\u001f\u007f]"; " ") | if length > n then .[0:n] + "…" else . end;
   def base: tostring | split("/") | map(select(. != "")) | last // "";
@@ -83,6 +87,10 @@ if [[ -n $state ]]; then
       since: ($previous.since // .t)
     }' <<<"$record" >"$file.tmp" && mv -f "$file.tmp" "$file"
 fi
+
+fi  # --refresh
+
+mkdir -p "$sessions"
 
 # Drop sessions whose Claude Code process is gone.
 shopt -s nullglob

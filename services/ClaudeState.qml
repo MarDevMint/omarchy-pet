@@ -75,6 +75,21 @@ Item {
     onLoadFailed: root.hooksInstalled = false
   }
 
+  // A terminal closed abruptly never runs SessionEnd; have the hook prune
+  // dead sessions and rebuild state.json every 30 s (about 20 ms of work).
+  Process {
+    id: refresher
+    command: [decodeURIComponent(String(Qt.resolvedUrl("../bin/claudepet-hook")).replace(/^file:\/\//, "")), "--refresh"]
+  }
+
+  Timer {
+    interval: 30000
+    running: true
+    repeat: true
+    triggeredOnStart: true
+    onTriggered: if (!refresher.running) refresher.running = true
+  }
+
   // The hook replaces state.json atomically, which can drop the file watch;
   // re-read it every couple of seconds (an in-process read, no subprocess).
   // Also expires done/error on time.

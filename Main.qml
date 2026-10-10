@@ -34,6 +34,10 @@ BarWidget {
   readonly property bool roam: setting("roam", true) !== false
   readonly property bool pinned: setting("pinned", false) === true
   readonly property real pinX: Number(setting("pinX", -1))
+  // Bar: "Single" = one Clawd + badge, "Agents" = one Clawd per session.
+  readonly property string barStyle: String(setting("barStyle", "Single"))
+  // Badge on the single Clawd: "Count", "Dot" or "None".
+  readonly property string badge: String(setting("badge", "Count"))
 
   function setting(key, fallback) {
     return settings && settings[key] !== undefined ? settings[key] : fallback
@@ -153,11 +157,24 @@ BarWidget {
     panelOpen = false
   }
 
-  implicitWidth: Math.round(barSprite.width) + Style.spacing.sm
+  readonly property bool showAgents: barStyle === "Agents" && claude.agents.length > 0
+
+  // Steady clock for the per-agent sprites (each loops its own move).
+  property int tick: 0
+  Timer {
+    interval: Moves.frameInterval(Moves.MOVES.music, root.animationSpeed)
+    running: root.animate && root.showAgents
+    repeat: true
+    onTriggered: root.tick++
+  }
+
+  implicitWidth: (showAgents ? Math.round(barAgents.implicitWidth) : Math.round(barSprite.width))
+    + Style.spacing.sm
   implicitHeight: barSize
 
   UI.ClawdSprite {
     id: barSprite
+    visible: !root.showAgents
     height: root.barSize * root.petScale
     width: implicitWidth
     anchors.centerIn: parent
@@ -175,7 +192,35 @@ BarWidget {
     }
   }
 
+  // Agents at work (or waiting on you), like the notification bell's count.
+  UI.CountBadge {
+    // One agent is obvious from Clawd himself; the badge starts at two.
+    visible: !root.showAgents && count >= 2 && style !== "None"
+    anchors.right: barSprite.right
+    anchors.rightMargin: -Style.space(4)
+    anchors.top: parent.top
+    anchors.topMargin: Style.space(3)
+    style: root.badge
+    count: root.claude.activeCount
+    fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+  }
+
+  UI.BarAgents {
+    id: barAgents
+    visible: root.showAgents
+    anchors.centerIn: parent
+    agents: root.claude.agents
+    musicPlaying: music.playing
+    tick: root.tick
+    animate: root.animate
+    smoothScaling: root.smoothScaling
+    spriteHeight: root.barSize * root.petScale
+    bar: root.bar
+    onClicked: root.panelOpen = !root.panelOpen
+  }
+
   HoverHandler {
+    enabled: !root.showAgents
     onHoveredChanged: {
       if (!root.bar) return
       if (hovered) root.bar.showTooltip(root, root.statusLine)

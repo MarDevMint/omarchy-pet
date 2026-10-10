@@ -160,6 +160,38 @@ KeyboardPanel {
         text: "Options"
       }
 
+      // Bar layout and badge, as chip rows to stay compact.
+      Repeater {
+        model: [
+          { key: "barStyle", label: "Bar", options: ["Single", "Agents"] },
+          { key: "badge", label: "Badge", options: ["Count", "Dot", "None"] }
+        ]
+
+        Item {
+          required property var modelData
+          width: column.width
+          height: chips.implicitHeight
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: modelData.label
+            color: Color.foreground
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+            textFormat: Text.PlainText
+          }
+
+          ButtonGroup {
+            id: chips
+            anchors.right: parent.right
+            options: modelData.options
+            value: String(root.pet[modelData.key])
+            fontSize: Style.font.caption
+            onChanged: function(v) { root.pet.setSetting(modelData.key, v) }
+          }
+        }
+      }
+
       Toggle {
         width: parent.width
         label: "Walk on desktop"

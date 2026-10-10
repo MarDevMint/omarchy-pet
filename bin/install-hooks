@@ -1,0 +1,58 @@
+#!/bin/bash
+
+# Add (or with --uninstall, remove) the mar.claudepet hooks in Claude Code's
+# settings.json. Other hooks are left alone and a timestamped backup is made
+# before every change.
+
+set -euo pipefail
+
+settings="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
+hook="$(cd -- "$(dirname -- "$0")" && pwd)/claudepet-hook"
+mode=${1:-install}
+
+# event -> matcher ("" means no matcher)
+spec='{
+  "SessionStart": "",
+  "UserPromptSubmit": "",
+  "PreToolUse": "*",
+  "Notification": "permission_prompt|elicitation_dialog",
+  "Stop": "",
+  "StopFailure": "",
+  "SessionEnd": ""
+}'
+
+[[ -f $settings ]] || echo '{}' >"$settings"
+jq empty "$settings" || { echo "Invalid JSON: $settings" >&2; exit 1; }
+
+case $mode in
+  install)
+    filter='
+      reduce ($spec | to_entries[]) as $e (.;
+        if any(.hooks[$e.key][]?.hooks[]?; .command == $cmd) then .
+        else .hooks[$e.key] = ((.hooks[$e.key] // []) +
+          [ (if $e.value == "" then {} else {matcher: $e.value} end)
+            + {hooks: [{type: "command", command: $cmd}]} ])
+        end)' ;;
+  --uninstall | uninstall)
+    filter='
+      reduce ($spec | keys[]) as $k (.;
+        if (.hooks[$k] | type) == "array" then
+          .hooks[$k] |= [ .[] | .hooks |= [ .[]? | select(.command != $cmd) ] | select((.hooks | length) > 0) ]
+          | if (.hooks[$k] | length) == 0 then del(.hooks[$k]) else . end
+        else . end)
+      | if (.hooks | type) == "object" and (.hooks | length) == 0 then del(.hooks) else . end' ;;
+  *) echo "Usage: install-hooks [--uninstall]" >&2; exit 1 ;;
+esac
+
+new=$(jq --indent 2 --arg cmd "$hook" --argjson spec "$spec" "$filter" "$settings")
+if [[ $new == "$(jq --indent 2 . "$settings")" ]]; then
+  echo "Nothing to change in $settings"
+  exit 0
+fi
+
+backup="$settings.bak.claudepet.$(date +%s)"
+cp -p -- "$settings" "$backup"
+printf '%s\n' "$new" >"$settings.tmp.$$"
+mv -f -- "$settings.tmp.$$" "$settings"
+echo "Updated $settings (backup: $backup)"
+echo "Restart open Claude Code sessions to pick up the change."

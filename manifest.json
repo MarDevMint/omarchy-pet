@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "id": "mar.claudepet",
+  "name": "Claude Pet",
+  "version": "0.3.0",
+  "author": "Mar",
+  "license": "MIT",
+  "description": "Clawd, a tiny Claude Code companion in the bar and on your desktop. Reads with a magnifier, builds with a wrench, waits at the laptop when Claude needs you, wears headphones while your music plays and naps otherwise. Forked from OmaPets.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "activation": "on-demand",
+  "entryPoints": {
+    "barWidget": "Main.qml"
+  },
+  "barWidget": {
+    "displayName": "Claude Pet",
+    "description": "Clawd reacts to what Claude Code is doing. Click for moves and options.",
+    "category": "AI",
+    "aliases": [
+      "pet",
+      "clawd",
+      "claude"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "scale": 1.0,
+      "smoothScaling": false,
+      "animate": true,
+      "roam": true,
+      "pinned": false,
+      "pinX": -1,
+      "deskScale": 0.55,
+      "animationSpeed": 1.0
+    },
+    "schema": [
+      {
+        "key": "scale",
+        "type": "number",
+        "label": "Pet scale",
+        "min": 0.5,
+        "max": 2.0,
+        "step": 0.05,
+        "defaultValue": 1.0
+      },
+      {
+        "key": "animationSpeed",
+        "type": "number",
+        "label": "Animation speed",
+        "min": 0.5,
+        "max": 1.5,
+        "step": 0.05,
+        "defaultValue": 1.0,
+        "description": "Lower is calmer. 1.0 is already slower than the original GIFs."
+      },
+      {
+        "key": "smoothScaling",
+        "type": "boolean",
+        "label": "Smooth scaling",
+        "defaultValue": false,
+        "description": "Turn off for pixel-art pets."
+      },
+      {
+        "key": "animate",
+        "type": "boolean",
+        "label": "Animate",
+        "defaultValue": true,
+        "description": "Off shows one still frame and runs no timer."
+      },
+      {
+        "key": "roam",
+        "type": "boolean",
+        "label": "Walk on desktop",
+        "defaultValue": true,
+        "description": "Clawd strolls along the bottom of the screen while Claude is idle."
+      },
+      {
+        "key": "pinned",
+        "type": "boolean",
+        "label": "Pin in place",
+        "defaultValue": false,
+        "description": "Keep the desktop Clawd still. Right-click it to toggle."
+      },
+      {
+        "key": "deskScale",
+        "type": "number",
+        "label": "Desktop pet scale",
+        "min": 0.3,
+        "max": 1.5,
+        "step": 0.05,
+        "defaultValue": 0.55
+      }
+    ]
+  }
+}

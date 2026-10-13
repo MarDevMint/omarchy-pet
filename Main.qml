@@ -114,7 +114,7 @@ BarWidget {
 
   // "Resting" / "Listening to music" while idle, Claude's state otherwise.
   readonly property string moodLine: claudeIdle && claude.state === "idle"
-    ? (music.playing ? "Listening to music" : "Resting")
+    ? (music.playing ? music.label : "Resting")
     : claude.label
   readonly property string statusLine: "Claude Code · " + claude.label
     + (claude.sessions > 1 ? " (" + claude.sessions + " sessions)" : "")
@@ -258,7 +258,17 @@ BarWidget {
     spriteHeight: root.barSize * root.petScale
     colourFor: root.colourFor
     bar: root.bar
-    onClicked: root.panelOpen = !root.panelOpen
+    // Left: panel. Right: panel on this agent's colour. Middle: laptop.
+    onClicked: function(agent, button) {
+      if (button === Qt.MiddleButton) {
+        root.playOnce("laptop", 2)
+      } else if (button === Qt.RightButton && agent.cwd) {
+        petPanel.editingCwd = agent.cwd
+        root.panelOpen = true
+      } else {
+        root.panelOpen = !root.panelOpen
+      }
+    }
   }
 
   HoverHandler {
@@ -283,6 +293,7 @@ BarWidget {
     fallbackText: root.moodLine
     previewMove: root.oneShot
     musicPlaying: music.playing
+    musicLabel: music.label
     colourFor: root.colourFor
     positions: root.deskPositions
     pinned: root.pinned

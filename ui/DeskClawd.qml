@@ -2,17 +2,18 @@ import QtQuick
 import qs.Commons
 import "../lib/Moves.js" as Moves
 
-// One Clawd on the desktop strip (see DesktopPet.qml). Fills the strip; only
-// `hitArea` (Clawd himself) takes clicks. Wanders while allowed, otherwise
-// stands and shows `move`. Left-click: laptop. Right-click: pin all.
-// Drag: move.
+// One Clawd on the desktop (see DesktopPet.qml). Fills the screen; only
+// `hitArea` (Clawd himself) takes clicks. Starts on the bottom edge, can be
+// dragged anywhere, and wanders sideways at whatever height he was left at.
+// Left-click: laptop. Right-click: pin all. Drag: move.
 Item {
   id: root
 
   property var move: Moves.MOVES.rest
   property bool canWander: false
   property bool pinned: false
-  property real startX: -1          // 0..1 along the strip, -1 = `spawnX`
+  property real startX: -1          // 0..1 across the screen, -1 = `spawnX`
+  property real startY: -1          // 0..1 down the screen, -1 = bottom edge
   property real spawnX: 0.85
   property real petScale: 0.55
   property bool smoothScaling: false
@@ -28,10 +29,13 @@ Item {
   signal dropped()
 
   readonly property Item hitArea: pet
-  readonly property real fraction: maxX > 0 ? pet.x / maxX : -1
+  // Where he stands, as 0..1 of the room he has (what gets saved).
+  readonly property var position: maxX > 0 && maxY > 0
+    ? { x: pet.x / maxX, y: pet.y / maxY } : null
   readonly property real petW: Moves.CELL_WIDTH * petScale
   readonly property real petH: Moves.CELL_HEIGHT * petScale
   readonly property real maxX: Math.max(0, width - petW)
+  readonly property real maxY: Math.max(0, height - petH)
   readonly property bool walking: walkAnim.running
   readonly property var shownMove: oneShot
     || (walking ? Moves.move(walkingRight ? "walkRight" : "walkLeft") : move)
@@ -61,6 +65,7 @@ Item {
   }
 
   onMaxXChanged: if (pet.x > maxX) pet.x = maxX
+  onMaxYChanged: if (pet.y > maxY) pet.y = maxY
   onCanWanderChanged: if (!canWander && walkAnim.running) walkAnim.stop()
   onPinnedChanged: if (pinned && walkAnim.running) walkAnim.stop()
   onShownMoveChanged: frame = 0
@@ -101,9 +106,9 @@ Item {
     id: pet
     width: root.petW
     height: root.petH
-    y: root.height - height
-    // Starting spot. Walking and dragging take over x afterwards.
+    // Starting spot. Walking and dragging take over afterwards.
     x: (root.startX >= 0 ? root.startX : root.spawnX) * root.maxX
+    y: (root.startY >= 0 ? Math.min(1, root.startY) : 1) * root.maxY
 
     ClawdSprite {
       anchors.fill: parent
@@ -120,9 +125,11 @@ Item {
       hoverEnabled: true
       cursorShape: root.dragging ? Qt.ClosedHandCursor : Qt.PointingHandCursor
       drag.target: pet
-      drag.axis: Drag.XAxis
+      drag.axis: Drag.XAndYAxis
       drag.minimumX: 0
       drag.maximumX: root.maxX
+      drag.minimumY: 0
+      drag.maximumY: root.maxY
       property bool moved: false
 
       onPressed: { moved = false; walkAnim.stop() }
@@ -146,7 +153,9 @@ Item {
     width: bubbleLabel.implicitWidth + Style.spacing.md * 2
     height: bubbleLabel.implicitHeight + Style.spacing.sm * 2
     x: Math.max(0, Math.min(root.width - width, pet.x + pet.width / 2 - width / 2))
-    y: pet.y + pet.height * 0.3 - height
+    // Above him, or below when he is up against the top edge.
+    y: pet.y + pet.height * 0.3 - height >= 0
+      ? pet.y + pet.height * 0.3 - height : pet.y + pet.height
     radius: Style.cornerRadius
     color: Color.popups.background
     border.color: Color.popups.border

@@ -4,9 +4,10 @@ import Quickshell.Wayland
 import qs.Commons
 import "../lib/Moves.js" as Moves
 
-// The desktop strip along the bottom of the screen: one Clawd per agent
+// A transparent full-screen layer holding one Clawd per agent
 // (DeskClawd.qml), or the classic Clawd when no Claude Code session is open.
-// Only the Clawds take clicks (mask); everything else passes through.
+// Clawds can be dragged anywhere. Only the Clawds take clicks (mask);
+// everything else passes through to the windows below.
 PanelWindow {
   id: root
 
@@ -15,8 +16,11 @@ PanelWindow {
   property string fallbackText: ""
   property var previewMove: null     // a move previewed from the panel
   property bool musicPlaying: false
+  property string musicLabel: "Listening to music"
   property var colourFor: function(cwd) { return "#c97159" }
-  property var positions: ({})       // {cwd: 0..1}, saved while pinned
+  // {cwd: {x, y}} as 0..1 of the screen, saved while pinned. Older saves
+  // hold a bare number (x along the bottom); those still load.
+  property var positions: ({})
   property bool pinned: false
   property bool roam: true
   property real petScale: 0.55
@@ -25,18 +29,22 @@ PanelWindow {
   property real speed: 1.0
   property int maxShown: 7
 
-  // (pinned, {cwd: fraction}) — the caller saves both.
+  // (pinned, {cwd: {x, y}}) — the caller saves both.
   signal pinRequested(bool pinned, var positions)
 
   readonly property bool hasAgents: agents.length > 0
-  readonly property var clawds: hasAgents ? agents.slice(0, maxShown) : [{ cwd: "", fallback: true }]
+  // A count, not an array: ClaudeState hands out a fresh agents array every
+  // couple of seconds, and an array model would rebuild every Clawd each
+  // time (killing a drag halfway and snapping him back).
+  readonly property int clawdCount: hasAgents ? Math.min(agents.length, maxShown) : 1
+  readonly property var fallbackAgent: ({ cwd: "", fallback: true })
   property var maskRegions: []
 
   function currentPositions() {
     var out = {}
     for (var i = 0; i < clawdRepeater.count; i++) {
       var c = clawdRepeater.itemAt(i)
-      if (c && c.fraction >= 0) out[c.key] = c.fraction
+      if (c && c.position) out[c.key] = c.position
     }
     return out
   }
@@ -54,18 +62,19 @@ PanelWindow {
   anchors {
     left: true
     right: true
+    top: true
     bottom: true
   }
-  implicitHeight: Math.ceil(Moves.CELL_HEIGHT * petScale + Style.font.caption * 2.5 + Style.spacing.md)
   mask: Region { regions: root.maskRegions }
 
   Repeater {
     id: clawdRepeater
-    model: root.clawds
+    model: root.clawdCount
 
     DeskClawd {
-      required property var modelData
       required property int index
+      readonly property var modelData: root.hasAgents ? (root.agents[index] || root.fallbackAgent) : root.fallbackAgent
+      readonly property var saved: root.positions[key]
       readonly property string key: modelData.cwd || ""
       readonly property bool isFallback: !!modelData.fallback
       readonly property string agentState: isFallback ? "idle" : Moves.state(modelData.state)
@@ -75,7 +84,9 @@ PanelWindow {
         || (isFallback ? root.fallbackMove : Moves.moveForState(agentState, root.musicPlaying))
       canWander: root.roam && root.animate && Moves.isIdle(agentState) && !root.previewMove
       pinned: root.pinned
-      startX: root.positions[key] !== undefined ? Number(root.positions[key]) : -1
+      startX: saved === undefined || saved === null ? -1
+        : (typeof saved === "object" ? Number(saved.x) : Number(saved))
+      startY: saved !== null && typeof saved === "object" ? Number(saved.y) : -1
       spawnX: Math.max(0.05, 0.85 - index * 0.12)
       petScale: root.petScale
       smoothScaling: root.smoothScaling
@@ -83,9 +94,9 @@ PanelWindow {
       speed: root.speed
       tint: isFallback ? "#c97159" : root.colourFor(key)
       bubbleText: isFallback ? root.fallbackText
-        : (modelData.project || "unknown") + " · " + (agentState === "idle"
-          ? (root.musicPlaying ? "Listening to music" : "Resting")
-          : Moves.stateLabel(agentState) + (modelData.detail ? " · " + modelData.detail : ""))
+        : agentState === "idle"
+          ? (root.musicPlaying ? root.musicLabel : "Resting")
+          : Moves.stateLabel(agentState) + (modelData.detail ? " · " + modelData.detail : "")
       bubbleForced: agentState === "waiting" || agentState === "error" || agentState === "done"
 
       onTouched: playOnce("laptop", 2)

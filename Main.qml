@@ -197,6 +197,14 @@ BarWidget {
     panelOpen = false
   }
 
+  // Bar click target contract (like WidgetButton): with this the bar shows
+  // the hand cursor over Clawd and routes left clicks here. Agents mode
+  // registers each small Clawd too (BarAgents.qml); this is the fallback.
+  function triggerPress(button) {
+    if (button === Qt.MiddleButton) playOnce("laptop", 2)
+    else panelOpen = !panelOpen
+  }
+
   readonly property bool showAgents: barStyle === "Agents" && claude.agents.length > 0
 
   // Steady clock for the per-agent sprites (each loops its own move).
@@ -223,26 +231,28 @@ BarWidget {
     smooth: root.smoothScaling
     tint: root.mainTint
 
+    // Left clicks arrive through triggerPress; the bar slot does not take
+    // right and middle clicks, so they land here.
     MouseArea {
       anchors.fill: parent
-      acceptedButtons: Qt.LeftButton | Qt.MiddleButton
-      onClicked: function(mouse) {
-        if (mouse.button === Qt.MiddleButton) root.playOnce("laptop", 2)
-        else root.panelOpen = !root.panelOpen
-      }
+      acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+      cursorShape: Qt.PointingHandCursor
+      onClicked: function(mouse) { root.triggerPress(mouse.button) }
     }
   }
 
-  // Agents at work (or waiting on you), like the notification bell's count.
+  // Open Claude Code agents, like the notification bell's count.
   UI.CountBadge {
+    // Sits on the single Clawd, or on the last Clawd of the agents row.
     // One agent is obvious from Clawd himself; the badge starts at two.
-    visible: !root.showAgents && count >= 2 && style !== "None"
-    anchors.right: barSprite.right
+    visible: count >= 2 && style !== "None"
+    z: 1
+    anchors.right: root.showAgents ? barAgents.right : barSprite.right
     anchors.rightMargin: -Style.space(4)
     anchors.top: parent.top
     anchors.topMargin: Style.space(3)
     style: root.badge
-    count: root.claude.activeCount
+    count: root.claude.agents.length
     fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
   }
 
